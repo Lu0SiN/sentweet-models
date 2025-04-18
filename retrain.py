@@ -16,6 +16,10 @@ GITHUB_TOKEN = secrets["GITHUB_TOKEN"]
 GITHUB_USER = "Lu0SiN"
 REPO_NAME = "sentweet-models"
 
+# 🔐 Extract and write Firebase service account key
+with open("serviceAccountKey.json", "w") as f:
+    json.dump({k: v for k, v in secrets.items() if k != "GITHUB_TOKEN"}, f)
+
 headers = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json"
@@ -61,7 +65,7 @@ labels = merged_df["corrected"].astype("category")
 y = labels.cat.codes.values
 num_classes = len(set(y))
 
-# ------------------ Download Model + Tokenizer ------------------
+# ------------------ Download previous model + tokenizer ------------------
 def download_from_release(filename, tag="v0.1"):
     rel = requests.get(
         f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/tags/{tag}",
@@ -79,7 +83,7 @@ def download_from_release(filename, tag="v0.1"):
 download_from_release("word_index.json", current_tag)
 download_from_release("last_model.h5", current_tag)
 
-# ------------------ Tokenizer + Text to Sequence ------------------
+# ------------------ Tokenizer + Sequence ------------------
 with open("word_index.json", "r") as f:
     word_index = json.load(f)
 
@@ -91,7 +95,7 @@ updated_word_index = tokenizer.word_index
 X = tokenizer.texts_to_sequences(texts)
 X = pad_sequences(X, maxlen=150)
 
-# ------------------ Model Training ------------------
+# ------------------ Train Model ------------------
 try:
     model = load_model("last_model.h5")
     print("✅ Loaded previous model.")
@@ -125,7 +129,7 @@ with open("word_index.json", "w") as f:
 with open("model_version.txt", "w") as f:
     f.write(TAG)
 
-# ------------------ GitHub Upload ------------------
+# ------------------ Upload to GitHub ------------------
 payload = {
     "tag_name": TAG,
     "name": f"Model Update {TAG}",
