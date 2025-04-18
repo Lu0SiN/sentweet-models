@@ -8,6 +8,9 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from firebase_admin import credentials, db
 import firebase_admin
 
+# ✅ Enable eager execution
+tf.compat.v1.enable_eager_execution()
+
 # ------------------ Load secrets ------------------
 with open("secrets.json", "r") as f:
     secrets = json.load(f)
