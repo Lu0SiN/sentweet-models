@@ -1,19 +1,24 @@
+# ✅ Force eager execution before importing anything from Keras
 import tensorflow as tf
+import os
 
-# ✅ FORCE Eager execution *before* anything else uses TensorFlow
-tf.compat.v1.disable_eager_execution()  # Clean any previous setup
-tf.compat.v1.enable_eager_execution()   # Enable eagerly (needed for .numpy())
-print("✅ Eager execution force-enabled.")
+if not tf.executing_eagerly():
+    tf.compat.v1.disable_eager_execution()
+    tf.compat.v1.enable_eager_execution()
+    print("✅ Eager execution was disabled. Now force-enabled.")
+else:
+    print("✅ Eager execution is already enabled.")
 
-import json, os, requests
+# Now the rest of your imports
+import json, requests
 import pandas as pd
-import tensorflow as tf
 from tensorflow.keras.models import load_model, Sequential
 from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropout
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from firebase_admin import credentials, db
 import firebase_admin
+
 
 # ------------------ Load secrets ------------------
 with open("secrets.json", "r") as f:
