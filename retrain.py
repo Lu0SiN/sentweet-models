@@ -8,8 +8,12 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from firebase_admin import credentials, db
 import firebase_admin
 
-# ✅ Enable eager execution
-tf.compat.v1.enable_eager_execution()
+# 🔧 Make sure eager execution is enabled (safely)
+if not tf.executing_eagerly():
+    tf.config.run_functions_eagerly(True)
+    print("✅ Eager execution was disabled. Now enabled.")
+else:
+    print("✅ Eager execution is already enabled.")
 
 # ------------------ Load secrets ------------------
 with open("secrets.json", "r") as f:
