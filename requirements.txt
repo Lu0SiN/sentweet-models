@@ -1,0 +1,9 @@
+tensorflow
+keras
+firebase-admin
+pandas
+numpy
+scikit-learn
+requests
+matplotlib
+schedule
