@@ -86,6 +86,11 @@ def download_from_release(filename, tag="v0.1"):
 download_from_release("word_index.json", current_tag)
 download_from_release("last_model.h5", current_tag)
 
+print("📊 Kaggle size:", len(kaggle_df))
+print("📥 Firebase size:", len(firebase_df))
+print("🔗 Merged dataset size:", len(merged_df))
+
+
 # ------------------ Tokenizer + Sequence ------------------
 with open("word_index.json", "r") as f:
     word_index = json.load(f)
