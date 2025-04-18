@@ -22,6 +22,8 @@ jobs:
       run: |
         pip install -r requirements.txt
 
+    - name: Reconstruct secrets.json from GitHub Secret
+      run: echo '${{ secrets.SECRETS_JSON }}' > secrets.json
+
     - name: Run retraining script
       run: python retrain.py
-      
