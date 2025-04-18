@@ -1,7 +1,4 @@
-import json
-import requests
-import os
-import firebase_admin
+import json, os, requests
 import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.models import load_model, Sequential
@@ -9,6 +6,7 @@ from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropo
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from firebase_admin import credentials, db
+import firebase_admin
 
 # ------------------ Load secrets ------------------
 with open("secrets.json", "r") as f:
@@ -26,25 +24,14 @@ headers = {
 # ------------------ Versioning ------------------
 def get_next_version(tag="v0.1"):
     base = tag.strip().lower().replace("v", "")
-    parts = base.split(".")
-    if len(parts) != 2:
-        raise ValueError("Invalid version format.")
-    major, minor = map(int, parts)
-    minor += 1
-    return f"v{major}.{minor}"
+    major, minor = map(int, base.split("."))
+    return f"v{major}.{minor + 1}"
 
-# Step 1: Get latest version from GitHub Releases
 release_api = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/latest"
 latest = requests.get(release_api, headers=headers).json()
 current_tag = latest.get("tag_name", "v0.1")
 TAG = get_next_version(current_tag)
 print(f"🔁 Latest version: {current_tag} → New version: {TAG}")
-
-
-headers = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github.v3+json"
-}
 
 # ------------------ Firebase Init ------------------
 cred = credentials.Certificate("serviceAccountKey.json")
@@ -54,51 +41,49 @@ firebase_admin.initialize_app(cred, {
 
 ref = db.reference("feedback")
 data = ref.get()
+firebase_df = pd.DataFrame.from_dict(data, orient="index") if data else pd.DataFrame()
 
-if not data or len(data) < 500:
-    print(f"❌ Not enough data to retrain. Found {len(data) if data else 0} entries.")
+# ------------------ Load Kaggle Dataset ------------------
+kaggle_df = pd.read_csv("kaggle_dataset.csv")
+kaggle_df = kaggle_df[["SENTIMENT", "TWEET"]].dropna()
+kaggle_df.columns = ["corrected", "tweet"]
+
+# ------------------ Merge both datasets ------------------
+if firebase_df.empty or len(firebase_df) < 200:
+    print(f"❌ Not enough feedback data to retrain. Found {len(firebase_df)} entries.")
     exit()
 
-df = pd.DataFrame.from_dict(data, orient='index')
-texts = df['tweet'].astype(str).tolist()
-labels = df['corrected'].astype('category')
+firebase_df = firebase_df[["corrected", "tweet"]].dropna()
+merged_df = pd.concat([firebase_df, kaggle_df], ignore_index=True)
+
+texts = merged_df["tweet"].astype(str).tolist()
+labels = merged_df["corrected"].astype("category")
 y = labels.cat.codes.values
 num_classes = len(set(y))
 
-def get_next_version(tag="v0.1"):
-    base = tag.strip().lower().replace("v", "")
-    parts = base.split(".")
-    if len(parts) != 2:
-        raise ValueError("Invalid version format.")
-    major, minor = map(int, parts)
-    minor += 1
-    return f"v{major}.{minor}"
-
-
-# ------------------ Download from GitHub Release ------------------
-
+# ------------------ Download Model + Tokenizer ------------------
 def download_from_release(filename, tag="v0.1"):
-    release_api = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/tags/{tag}"
-    release = requests.get(release_api, headers=headers).json()
-    asset = next((a for a in release["assets"] if a["name"] == filename), None)
+    rel = requests.get(
+        f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/tags/{tag}",
+        headers=headers
+    ).json()
+    asset = next((a for a in rel["assets"] if a["name"] == filename), None)
     if not asset:
         raise ValueError(f"{filename} not found in release {tag}")
-    download_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/assets/{asset['id']}"
-    dl_headers = headers.copy()
-    dl_headers["Accept"] = "application/octet-stream"
-    r = requests.get(download_url, headers=dl_headers)
+    url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/assets/{asset['id']}"
+    r = requests.get(url, headers={**headers, "Accept": "application/octet-stream"})
     with open(filename, "wb") as f:
         f.write(r.content)
     print(f"✅ Downloaded: {filename}")
 
-download_from_release("word_index.json", tag="v0.1")
-download_from_release("last_model.h5", tag="v0.1")
+download_from_release("word_index.json", current_tag)
+download_from_release("last_model.h5", current_tag)
 
-# ------------------ Update Tokenizer ------------------
+# ------------------ Tokenizer + Text to Sequence ------------------
 with open("word_index.json", "r") as f:
     word_index = json.load(f)
 
-tokenizer = Tokenizer(num_words=5000, oov_token="<OOV>")
+tokenizer = Tokenizer(num_words=15000, oov_token="<OOV>")
 tokenizer.word_index = word_index.copy()
 tokenizer.fit_on_texts(texts)
 updated_word_index = tokenizer.word_index
@@ -106,12 +91,12 @@ updated_word_index = tokenizer.word_index
 X = tokenizer.texts_to_sequences(texts)
 X = pad_sequences(X, maxlen=150)
 
-# ------------------ Load/Train Model ------------------
+# ------------------ Model Training ------------------
 try:
     model = load_model("last_model.h5")
     print("✅ Loaded previous model.")
 except:
-    print("❌ Could not load previous model.")
+    print("🆕 Creating new model...")
     model = Sequential([
         Embedding(input_dim=max(updated_word_index.values()) + 1, output_dim=64, input_length=150),
         Bidirectional(LSTM(64, return_sequences=True)),
@@ -137,30 +122,22 @@ with open("updated_model.tflite", "wb") as f:
 # ------------------ Save Outputs ------------------
 with open("word_index.json", "w") as f:
     json.dump(updated_word_index, f)
-
 with open("model_version.txt", "w") as f:
     f.write(TAG)
 
-print("✅ All files generated successfully.")
-
-# ------------------ Upload to GitHub Release ------------------
-
-# Create release
+# ------------------ GitHub Upload ------------------
 payload = {
     "tag_name": TAG,
     "name": f"Model Update {TAG}",
-    "body": f"Auto-generated release from retraining script. ({len(df)} samples)",
+    "body": f"Auto-generated release with {len(merged_df)} samples",
     "draft": False,
     "prerelease": False
 }
-
-response = requests.post(f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases", headers=headers, json=payload)
-res_data = response.json()
-if "upload_url" not in res_data:
-    print("❌ Failed to create release:", res_data)
+res = requests.post(f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases", headers=headers, json=payload).json()
+upload_url = res.get("upload_url", "").split("{")[0]
+if not upload_url:
+    print("❌ Failed to create release.")
     exit()
-
-upload_url = res_data["upload_url"].split("{")[0]
 
 def upload_to_release(file_path):
     file_name = os.path.basename(file_path)
@@ -169,15 +146,11 @@ def upload_to_release(file_path):
         "Content-Type": "application/octet-stream"
     }
     with open(file_path, "rb") as f:
-        upload_response = requests.post(
-            f"{upload_url}?name={file_name}",
-            headers=headers_upload,
-            data=f
-        )
-    if upload_response.status_code == 201:
-        print(f"✅ Uploaded {file_name}")
-    else:
-        print(f"❌ Upload failed for {file_name}:", upload_response.text)
+        resp = requests.post(f"{upload_url}?name={file_name}", headers=headers_upload, data=f)
+        if resp.status_code == 201:
+            print(f"✅ Uploaded: {file_name}")
+        else:
+            print(f"❌ Failed to upload {file_name}: {resp.text}")
 
 for file in ["updated_model.tflite", "last_model.h5", "word_index.json", "model_version.txt"]:
     upload_to_release(file)
