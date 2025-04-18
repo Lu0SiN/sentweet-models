@@ -1,3 +1,10 @@
+import tensorflow as tf
+
+# ✅ FORCE Eager execution *before* anything else uses TensorFlow
+tf.compat.v1.disable_eager_execution()  # Clean any previous setup
+tf.compat.v1.enable_eager_execution()   # Enable eagerly (needed for .numpy())
+print("✅ Eager execution force-enabled.")
+
 import json, os, requests
 import pandas as pd
 import tensorflow as tf
@@ -7,11 +14,6 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from firebase_admin import credentials, db
 import firebase_admin
-
-# ✅ True Eager Execution (compatible with TF 2.x and GitHub Actions)
-tf.compat.v1.disable_eager_execution()  # First make sure everything is clean
-tf.compat.v1.enable_eager_execution()
-print("✅ Eager execution force-enabled.")
 
 # ------------------ Load secrets ------------------
 with open("secrets.json", "r") as f:
