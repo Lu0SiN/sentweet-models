@@ -53,9 +53,11 @@ kaggle_df = kaggle_df[["SENTIMENT", "TWEET"]].dropna()
 kaggle_df.columns = ["corrected", "tweet"]
 
 # ------------------ Merge both datasets ------------------
-if firebase_df.empty or len(firebase_df) < 200:
-    print(f"❌ Not enough feedback data to retrain. Found {len(firebase_df)} entries.")
-    exit()
+#if firebase_df.empty or len(firebase_df) < 200:
+  #  print(f"❌ Not enough feedback data to retrain. Found {len(firebase_df)} entries.")
+ #   exit()
+
+print(f"ℹ️ Feedback samples found: {len(firebase_df)}. Proceeding with training anyway.")
 
 firebase_df = firebase_df[["corrected", "tweet"]].dropna()
 merged_df = pd.concat([firebase_df, kaggle_df], ignore_index=True)
