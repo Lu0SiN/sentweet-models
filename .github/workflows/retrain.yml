@@ -1,0 +1,27 @@
+name: Auto Retrain Every 4 Days
+
+on:
+  schedule:
+    - cron: '0 0 */4 * *'   # Every 4 days at 00:00 UTC
+  workflow_dispatch:         # Allow manual trigger from GitHub UI
+
+jobs:
+  retrain-model:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Run retraining script
+      run: python retrain.py
+      
