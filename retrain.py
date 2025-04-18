@@ -1,16 +1,15 @@
-# ✅ Force eager execution before importing anything from Keras
+# ✅ Eager execution must be enabled BEFORE importing keras
 import tensorflow as tf
-import os
 
+# Must happen before any keras imports
 if not tf.executing_eagerly():
-    tf.compat.v1.disable_eager_execution()
     tf.compat.v1.enable_eager_execution()
-    print("✅ Eager execution was disabled. Now force-enabled.")
+    print("✅ Eager execution was disabled. Now enabled.")
 else:
     print("✅ Eager execution is already enabled.")
 
-# Now the rest of your imports
-import json, requests
+# Now safe to import other packages
+import os, json, requests
 import pandas as pd
 from tensorflow.keras.models import load_model, Sequential
 from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropout
