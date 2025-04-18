@@ -130,7 +130,7 @@ except:
     ])
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-model.fit(X, y, epochs=5, batch_size=32, validation_split=0.1)
+model.fit(X, y, epochs=5, batch_size=32)
 model.save("last_model.h5")
 
 # ------------------ Export .tflite ------------------
