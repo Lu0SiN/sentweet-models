@@ -48,7 +48,7 @@ data = ref.get()
 firebase_df = pd.DataFrame.from_dict(data, orient="index") if data else pd.DataFrame()
 
 # ------------------ Load Kaggle Dataset ------------------
-kaggle_df = pd.read_csv("kaggle_dataset.csv")
+kaggle_df = pd.read_csv("kaggle_dataset.csv", on_bad_lines='skip')  # ✅ skips broken rows
 kaggle_df = kaggle_df[["SENTIMENT", "TWEET"]].dropna()
 kaggle_df.columns = ["corrected", "tweet"]
 
