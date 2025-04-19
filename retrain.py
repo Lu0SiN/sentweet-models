@@ -117,6 +117,12 @@ X = pad_sequences(X, maxlen=150)
 try:
     model = load_model("last_model.h5")
     print("✅ Loaded previous model.")
+    model.compile(
+        loss='sparse_categorical_crossentropy',
+        optimizer='adam',
+        metrics=['accuracy'],
+        run_eagerly=True  # Force eager mode even for loaded model
+    )
 except:
     print("🆕 Creating new model...")
     model = Sequential([
