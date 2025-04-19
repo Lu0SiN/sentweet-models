@@ -121,9 +121,19 @@ model.compile(
     run_eagerly=True
 )
 
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
+early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, verbose=1)
 
-model.fit(X, y, epochs=5, batch_size=32)
+history = model.fit(
+    X, y,
+    epochs=15,
+    batch_size=64,
+    validation_split=0.1,  # Or use train_test_split if needed
+    callbacks=[early_stop, lr_reduce]
+)
+
 model.save("last_model.h5")
 
 # ------------------ Export .tflite ------------------
