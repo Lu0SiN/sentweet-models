@@ -128,7 +128,14 @@ except:
         Dropout(0.3),
         Dense(num_classes, activation='softmax')
     ])
-    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    
+    model.compile(
+    loss='sparse_categorical_crossentropy',
+    optimizer='adam',
+    metrics=['accuracy'],
+    run_eagerly=True  # Enable eager execution
+    )
+
 
 model.fit(X, y, epochs=5, batch_size=32)
 model.save("last_model.h5")
