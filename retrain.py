@@ -1,14 +1,3 @@
-# ✅ Eager execution must be enabled BEFORE importing keras
-import tensorflow as tf
-
-# Must happen before any keras imports
-if not tf.executing_eagerly():
-    tf.compat.v1.enable_eager_execution()
-    print("✅ Eager execution was disabled. Now enabled.")
-else:
-    print("✅ Eager execution is already enabled.")
-
-# Now safe to import other packages
 import os, json, requests
 import pandas as pd
 from tensorflow.keras.models import load_model, Sequential
@@ -105,7 +94,7 @@ print("🔗 Merged dataset size:", len(merged_df))
 with open("word_index.json", "r") as f:
     word_index = json.load(f)
 
-tokenizer = Tokenizer(num_words=15000, oov_token="<OOV>")
+tokenizer = Tokenizer( oov_token="<OOV>")
 tokenizer.word_index = word_index.copy()
 tokenizer.fit_on_texts(texts)
 updated_word_index = tokenizer.word_index
