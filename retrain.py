@@ -90,7 +90,7 @@ download_from_release("last_model.h5", current_tag)
 
 print("📊 Kaggle size:", len(kaggle_df))
 print("📥 Firebase size:", len(firebase_df))
-print(f"📥 Firebase size: {len(firebase_df)}")
+print(f"🟦 Sentiment140 size: {len(sent140_df)}")
 print("🔗 Merged dataset size:", len(merged_df))
 
 
