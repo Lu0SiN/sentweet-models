@@ -52,6 +52,9 @@ kaggle_df = pd.read_csv("kaggle_dataset.csv")
 kaggle_df = kaggle_df[["SENTIMENT", "TWEET"]].dropna()
 kaggle_df.columns = ["corrected", "tweet"]
 
+# ------------------ Load sentiment140 Dataset ------------------
+sent140_df = pd.read_csv("sentiment140_new.csv")[["SENTIMENT", "TWEET"]].dropna()
+sent140_df.columns = ["corrected", "tweet"]
 # ------------------ Merge both datasets ------------------
 #if firebase_df.empty or len(firebase_df) < 200:
   #  print(f"❌ Not enough feedback data to retrain. Found {len(firebase_df)} entries.")
@@ -60,7 +63,7 @@ kaggle_df.columns = ["corrected", "tweet"]
 print(f"ℹ️ Feedback samples found: {len(firebase_df)}. Proceeding with training anyway.")
 
 firebase_df = firebase_df[["corrected", "tweet"]].dropna()
-merged_df = pd.concat([firebase_df, kaggle_df], ignore_index=True)
+merged_df = pd.concat([firebase_df, kaggle_df, sent140_df], ignore_index=True)
 
 texts = merged_df["tweet"].astype(str).tolist()
 labels = merged_df["corrected"].astype("category")
@@ -87,6 +90,7 @@ download_from_release("last_model.h5", current_tag)
 
 print("📊 Kaggle size:", len(kaggle_df))
 print("📥 Firebase size:", len(firebase_df))
+print(f"📥 Firebase size: {len(firebase_df)}")
 print("🔗 Merged dataset size:", len(merged_df))
 
 
