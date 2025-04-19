@@ -115,7 +115,7 @@ try:
 except:
     print("🆕 Creating new model...")
     model = Sequential([
-        Embedding(input_dim=max(updated_word_index.values()) + 1, output_dim=64, input_length=150),
+        Embedding(input_dim=len(updated_word_index) + 2, output_dim=64, input_length=150),
         Bidirectional(LSTM(64, return_sequences=True)),
         Dropout(0.5),
         Bidirectional(LSTM(32)),
