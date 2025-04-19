@@ -103,33 +103,24 @@ X = tokenizer.texts_to_sequences(texts)
 X = pad_sequences(X, maxlen=150)
 
 # ------------------ Train Model ------------------
-try:
-    model = load_model("last_model.h5")
-    print("✅ Loaded previous model.")
-    model.compile(
-        loss='sparse_categorical_crossentropy',
-        optimizer='adam',
-        metrics=['accuracy'],
-        run_eagerly=True  # Force eager mode even for loaded model
-    )
-except:
-    print("🆕 Creating new model...")
-    model = Sequential([
-        Embedding(input_dim=len(updated_word_index) + 2, output_dim=64, input_length=150),
-        Bidirectional(LSTM(64, return_sequences=True)),
-        Dropout(0.5),
-        Bidirectional(LSTM(32)),
-        Dense(32, activation='relu'),
-        Dropout(0.3),
-        Dense(num_classes, activation='softmax')
-    ])
-    
-    model.compile(
+print("🆕 Creating new model...")
+vocab_size = len(updated_word_index) + 2  # +1 for OOV, +1 for pad
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=64, input_length=150),
+    Bidirectional(LSTM(64, return_sequences=True)),
+    Dropout(0.5),
+    Bidirectional(LSTM(32)),
+    Dense(32, activation='relu'),
+    Dropout(0.3),
+    Dense(num_classes, activation='softmax')
+])
+model.compile(
     loss='sparse_categorical_crossentropy',
     optimizer='adam',
     metrics=['accuracy'],
-    run_eagerly=True  # Enable eager execution
-    )
+    run_eagerly=True
+)
+
 
 
 model.fit(X, y, epochs=5, batch_size=32)
