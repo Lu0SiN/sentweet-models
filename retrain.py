@@ -206,7 +206,7 @@ model.compile(loss='sparse_categorical_crossentropy',
 # Set up callbacks
 early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 model_checkpoint = ModelCheckpoint('model.h5', save_best_only=True, monitor='val_loss')
-reduce_lr= ReduceLROplateau(monitor='val_lose', factor=0.5, patience=2)
+reduce_lr= ReduceLROnplateau(monitor='val_lose', factor=0.5, patience=2)
 
 class_weights = {i: (1.0 / labels.value_counts().iloc[i]) for i in labels.cat.codes.unique()}
 # Train model
