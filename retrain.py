@@ -189,9 +189,9 @@ vocab_size = max(merged_word_index.values()) + 2  # Ensure large enough
 # Build optimized model to reduce overfitting
 model = Sequential([
     Embedding(input_dim=vocab_size, output_dim=64, input_length=150),
-    Bidirectional(LSTM(64, return_sequences=True)),
+    Bidirectional(LSTM(64, return_sequences=True, unroll=True)),
     Dropout(0.5),
-    Bidirectional(LSTM(32)),
+    Bidirectional(LSTM(32, return_sequences=False, unroll=True)),
     Dense(32, activation='relu'),
     Dropout(0.3),
     Dense(num_classes, activation='softmax')
@@ -265,7 +265,6 @@ tflite_model = converter.convert()
 # Save the converted model
 with open("updated_model.tflite", "wb") as f:
     f.write(tflite_model)
-
 
 
 # %%
