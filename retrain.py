@@ -15,7 +15,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropout
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 from firebase_admin import credentials, db
 from collections import OrderedDict, Counter
@@ -206,8 +206,9 @@ model.compile(loss='sparse_categorical_crossentropy',
 # Set up callbacks
 early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 model_checkpoint = ModelCheckpoint('model.h5', save_best_only=True, monitor='val_loss')
+reduce_lr= ReduceLROplateau(monitor='val_lose', factor=0.5, patience=2)
 
-class_weights = {i: (1.0 / labels.value_counts()[i]) for i in labels.cat.codes.unique()}
+class_weights = {i: (1.0 / labels.value_counts().iloc[i]) for i in labels.cat.codes.unique()}
 # Train model
 history = model.fit(
     X,
@@ -215,7 +216,7 @@ history = model.fit(
     epochs=10,
     batch_size=64,
     validation_split=0.1,
-    callbacks=[early_stop, model_checkpoint],
+    callbacks=[early_stop, model_checkpoint, reduce_lr],
     class_weight=class_weights,
     verbose=1
 )
