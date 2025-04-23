@@ -7,21 +7,19 @@ else:
     print("❌ GPU not detected, training will be slower")
 
 # ✅ Imports
-import os, json, requests
+import os, json, requests, re
 import pandas as pd
+import matplotlib.pyplot as plt
+from collections import OrderedDict, Counter
 import firebase_admin
-import re
+from firebase_admin import credentials, db
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropout
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from tensorflow.keras.optimizers import Adam
-from firebase_admin import credentials, db
-from collections import OrderedDict, Counter
 
-
-# %%
+# ✅ Text Cleaner
 def clean_text(text):
     text = text.lower()
     text = re.sub(r"http\S+|www\S+", "", text)
@@ -29,7 +27,6 @@ def clean_text(text):
     text = re.sub(r"[^a-zA-Z\s]", "", text)
     return text.strip()
 
-# %%
 # ✅ Load secrets.json
 with open("secrets.json", "r") as f:
     secrets = json.load(f)
@@ -38,7 +35,7 @@ GITHUB_TOKEN = secrets["GITHUB_TOKEN"]
 GITHUB_USER = "Lu0SiN"
 REPO_NAME = "sentweet-models"
 
-# ✅ Write Firebase key
+# ✅ Write Firebase Key
 with open("serviceAccountKey.json", "w") as f:
     json.dump({k: v for k, v in secrets.items() if k != "GITHUB_TOKEN"}, f)
 
@@ -47,8 +44,6 @@ headers = {
     "Accept": "application/vnd.github.v3+json"
 }
 
-
-# %%
 # ✅ Get Next Version
 def get_next_version(tag="v0.1"):
     base = tag.strip().lower().replace("v", "")
@@ -61,16 +56,14 @@ current_tag = latest.get("tag_name", "v0.1")
 TAG = get_next_version(current_tag)
 print(f"🔁 Latest version: {current_tag} → New version: {TAG}")
 
-
-# %%
-# ✅ Firebase Init (Safe)
+# ✅ Firebase Init
 cred = credentials.Certificate("serviceAccountKey.json")
 try:
     firebase_admin.initialize_app(cred, {
         'databaseURL': 'https://sentweetfeedback-default-rtdb.firebaseio.com/'
     })
 except ValueError:
-    pass  # Firebase already initialized
+    pass
 
 # ✅ Load Firebase Feedback
 ref = db.reference("feedback")
@@ -78,42 +71,27 @@ data = ref.get()
 firebase_df = pd.DataFrame.from_dict(data, orient="index") if data else pd.DataFrame()
 firebase_df = firebase_df[["corrected", "tweet"]].dropna()
 
-
-# %%
-# ✅ Load CSV Datasets
+# ✅ Load Datasets
 kaggle_df = pd.read_csv("kaggle_dataset.csv")[["SENTIMENT", "TWEET"]].dropna()
 kaggle_df.columns = ["corrected", "tweet"]
 
 sent140_df = pd.read_csv("sentiment140_balanced.csv")[["SENTIMENT", "TWEET"]].dropna()
 sent140_df.columns = ["corrected", "tweet"]
 
-# %%
 print(f"✅ Feedback: {len(firebase_df)}, Kaggle: {len(kaggle_df)}, Sent140: {len(sent140_df)}")
 
-# %%
-# ✅ Merge All
+# ✅ Merge and Prepare
 merged_df = pd.concat([firebase_df, kaggle_df, sent140_df], ignore_index=True)
 texts = merged_df["tweet"].astype(str).apply(clean_text).tolist()
 labels = merged_df["corrected"].astype("category")
 labels = labels.cat.set_categories(["Negative", "Neutral", "Positive", "Irrelevant"])
 y = labels.cat.codes.values
-num_classes = len(set(y))
-print(f"✅ Merged dataset: {len(merged_df)}")
 
-# %%
-# ✅ Check for Class Imbalance
+# ✅ Class Distribution Plot
 class_distribution = Counter(y)
-print(f"✅ Class Distribution: {class_distribution}")
-print(dict(enumerate(labels.cat.categories)))
-
-# %%
-import matplotlib.pyplot as plt
-
-# Get human-readable labels
 label_map = dict(enumerate(labels.cat.categories))
 class_distribution_named = {label_map[k]: v for k, v in class_distribution.items()}
 
-# Plot with correct labels
 plt.figure(figsize=(8, 4))
 plt.bar(class_distribution_named.keys(), class_distribution_named.values(), color="skyblue")
 plt.title("✅ Class Distribution")
@@ -123,9 +101,7 @@ plt.grid(True, axis='y')
 plt.tight_layout()
 plt.show()
 
-
-# %%
-# ✅ Download word_index.json
+# ✅ Download Previous Word Index
 def download_from_release(filename, tag="v0.1"):
     rel = requests.get(
         f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/releases/tags/{tag}",
@@ -142,77 +118,59 @@ def download_from_release(filename, tag="v0.1"):
 
 download_from_release("word_index.json", current_tag)
 
-# ✅ Load old word index
 try:
     with open('word_index.json', 'r') as f:
         old_word_index = json.load(f)
 except FileNotFoundError:
     old_word_index = {}
 
-
-# %%
-# ✅ Update Tokenizer
-tokenizer = Tokenizer(oov_token="<OOV>")
+# ✅ Tokenizer Update (Limit to top 10k words)
+tokenizer = Tokenizer(num_words=10000, oov_token="<OOV>")
 tokenizer.fit_on_texts(texts)
 new_word_index = tokenizer.word_index.copy()
 for word, index in old_word_index.items():
     if word not in new_word_index:
         new_word_index[word] = len(new_word_index) + 1
 
-# Optional: Sort word_index by index for consistency
-merged_word_index = OrderedDict(sorted(new_word_index.items(), key=lambda x: x[1]))
-tokenizer.word_index = merged_word_index
+# Filter and apply
+filtered_word_index = {w: i for w, i in new_word_index.items() if i < 10000}
+tokenizer.word_index = filtered_word_index
+vocab_size = len(filtered_word_index) + 2
 
-# %%
-# ✅ Filter word index to avoid out-of-bound errors
-filtered_word_index = {word: idx for word, idx in merged_word_index.items() if idx < 20000}
-vocab_size = len(filtered_word_index) + 2  # padding + OOV
-
-# ✅ Save filtered word index and vocab size
-with open("word_index.json", "w", encoding="utf-8") as f:
+with open("word_index.json", "w") as f:
     json.dump(filtered_word_index, f)
 with open("vocab_size.txt", "w") as f:
     f.write(str(vocab_size))
 
-# ✅ Tokenize using the filtered word index
-tokenizer.word_index = filtered_word_index
+# ✅ Preprocess Inputs
 X = tokenizer.texts_to_sequences(texts)
 X = pad_sequences(X, maxlen=150)
 
-# %%
-# ✅ Create New Model
-print("🆕 Creating new model...")
-vocab_size = max(merged_word_index.values()) + 2  # Ensure large enough
-
-# Build optimized model to reduce overfitting
-embedding_dim = 128
-lstm_units = 64
+# ✅ Build Model
+embedding_dim = 64
+lstm_units = 32
 dropout_rate = 0.5
 
-model = Sequential()
-model.add(Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=150))
-model.add(Bidirectional(LSTM(lstm_units, return_sequences=True)))
-model.add(Dropout(dropout_rate))
-model.add(Bidirectional(LSTM(lstm_units)))
-model.add(Dropout(dropout_rate))
-model.add(Dense(64, activation='relu'))
-model.add(Dense(4, activation='softmax'))  # 4 sentiment classes
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=150),
+    Bidirectional(LSTM(lstm_units, return_sequences=True)),
+    Dropout(dropout_rate),
+    Bidirectional(LSTM(lstm_units)),
+    Dropout(dropout_rate),
+    Dense(64, activation='relu'),
+    Dense(4, activation='softmax')
+])
 
-# Compile model with same settings
-model.compile(loss='sparse_categorical_crossentropy',
-              optimizer='adam',
-              metrics=['accuracy'])
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-# Set up callbacks
 early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 model_checkpoint = ModelCheckpoint('model.h5', save_best_only=True, monitor='val_loss')
-reduce_lr= ReduceLROnPlateau(monitor='val_lose', factor=0.5, patience=2)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2)
 
 class_weights = {i: (1.0 / labels.value_counts().iloc[i]) for i in labels.cat.codes.unique()}
-# Train model
+
 history = model.fit(
-    X,
-    y,
+    X, y,
     epochs=10,
     batch_size=64,
     validation_split=0.1,
@@ -221,59 +179,34 @@ history = model.fit(
     verbose=1
 )
 
+# ✅ Save Light Inference Model
+model.save("inference_model.h5", include_optimizer=False)
 
-# %%
-# ✅ Save Models
-model.save("last_model.h5")
-with open("word_index.json", "w") as f:
-    json.dump(merged_word_index, f)
-with open("model_version.txt", "w") as f:
-    f.write(TAG)
-
-# %%
-from tensorflow.keras.models import load_model
-
-# Load your model (adjust filename if needed)
-model = load_model("last_model.h5")
-
-# Check input shape
-print("Input shape matches [1, 150]:", model.input_shape == (None, 150))
-
-# Check output shape
-print("Output shape is [1, 4]:", model.output_shape == (None, 4))
-
-# Check activation function of the final layer
-print("Activation function of final layer is softmax:", model.layers[-1].activation.__name__ == 'softmax')
-
-
-# %%
-# 🔄 Export to TFLite with compatibility for LSTM/RNN models
-model = tf.keras.models.load_model("last_model.h5")
+# ✅ Export to Quantized TFLite
+model = tf.keras.models.load_model("inference_model.h5")
 
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
-
-# Critical fixes:
 converter.target_spec.supported_ops = [
     tf.lite.OpsSet.TFLITE_BUILTINS,
-    tf.lite.OpsSet.SELECT_TF_OPS  # Required for LSTM
+    tf.lite.OpsSet.SELECT_TF_OPS
 ]
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.target_spec.supported_types = [tf.float16]
 converter._experimental_lower_tensor_list_ops = False
 
 tflite_model = converter.convert()
-
-# Save the converted model
 with open("updated_model.tflite", "wb") as f:
     f.write(tflite_model)
 
-
-
-# %%
+# ✅ Verify
 interpreter = tf.lite.Interpreter(model_path="updated_model.tflite")
 interpreter.allocate_tensors()
-print("✅ Model is valid and ready for Android.")
+print("✅ TFLite model ready for Android.")
 
+# ✅ Save Version Tag
+with open("model_version.txt", "w") as f:
+    f.write(TAG)
 
-# %%
 # ✅ Upload to GitHub
 payload = {
     "tag_name": TAG,
@@ -293,15 +226,9 @@ def upload_to_release(file_path):
     }
     with open(file_path, "rb") as f:
         resp = requests.post(f"{upload_url}?name={file_name}", headers=headers_upload, data=f)
-        if resp.status_code == 201:
-            print(f"✅ Uploaded: {file_name}")
-        else:
-            print(f"❌ Failed to upload {file_name}: {resp.text}")
+        print(f"✅ Uploaded: {file_name}" if resp.status_code == 201 else f"❌ Failed: {file_name} - {resp.text}")
 
-for file in ["updated_model.tflite", "last_model.h5", "word_index.json", "model_version.txt"]:
+for file in ["updated_model.tflite", "inference_model.h5", "word_index.json", "model_version.txt"]:
     upload_to_release(file)
 
-print("✅ Finished training, exporting and uploading.")
-
-
-
+print("✅ Training, export and upload complete.")
