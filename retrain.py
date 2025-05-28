@@ -87,7 +87,7 @@ def save_feedback_count(count):
 current_feedback_count = len(firebase_df)
 last_feedback_count = get_last_feedback_count()
 
-if current_feedback_count - last_feedback_count < 200:
+if current_feedback_count - last_feedback_count < 20:
     print(f"⛔ Not enough new feedback samples. Only {current_feedback_count - last_feedback_count} new.")
     exit(0)
 else:
