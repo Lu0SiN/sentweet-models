@@ -20,7 +20,6 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras import Input
 
-# %%
 # ✅ Utility: Clean text
 def clean_text(text):
     text = text.lower()
@@ -46,7 +45,6 @@ headers = {
     "Accept": "application/vnd.github.v3+json"
 }
 
-# %%
 # ✅ Get next version tag
 def get_next_version(tag="v0.1"):
     base = tag.strip().lower().replace("v", "")
@@ -59,7 +57,6 @@ current_tag = latest.get("tag_name", "v0.1")
 TAG = get_next_version(current_tag)
 print(f"🔁 Latest version: {current_tag} → New version: {TAG}")
 
-# %%
 # ✅ Firebase Init
 cred = credentials.Certificate("serviceAccountKey.json")
 try:
@@ -90,13 +87,12 @@ def save_feedback_count(count):
 current_feedback_count = len(firebase_df)
 last_feedback_count = get_last_feedback_count()
 
-if current_feedback_count - last_feedback_count < 20:
+if current_feedback_count - last_feedback_count < 200:
     print(f"⛔ Not enough new feedback samples. Only {current_feedback_count - last_feedback_count} new.")
     exit(0)
 else:
     print(f"✅ Enough new feedback samples: {current_feedback_count - last_feedback_count}. Proceeding...")
 
-# %%
 # ✅ Load CSV Datasets
 kaggle_df = pd.read_csv("kaggle_dataset.csv")[["SENTIMENT", "TWEET"]].dropna()
 kaggle_df.columns = ["corrected", "tweet"]
@@ -104,15 +100,16 @@ kaggle_df.columns = ["corrected", "tweet"]
 sent140_df = pd.read_csv("sentiment140_labeled.csv")[["SENTIMENT", "TWEET"]].dropna()
 sent140_df.columns = ["corrected", "tweet"]
 
+print(f"✅ Feedback: {len(firebase_df)}, Kaggle: {len(kaggle_df)}, Sent140: {len(sent140_df)}")
+
+# ✅ Merge and prepare labels (only 3 classes)
 merged_df = pd.concat([kaggle_df, sent140_df, firebase_df], ignore_index=True)
 merged_df = merged_df[merged_df["corrected"].isin(["Negative", "Neutral", "Positive"])]
 texts = merged_df["tweet"].astype(str).apply(clean_text).tolist()
-
 labels = merged_df["corrected"].astype("category")
 labels = labels.cat.set_categories(["Negative", "Neutral", "Positive"])
 y = labels.cat.codes.values
 num_classes = len(set(y))
-print(f"✅ Feedback: {len(firebase_df)}, Kaggle: {len(kaggle_df)}, Sent140: {len(sent140_df)}")
 
 # ✅ Download and update word index
 def download_from_release(filename, tag="v0.1"):
@@ -151,22 +148,18 @@ merged_word_index = OrderedDict(sorted(new_word_index.items(), key=lambda x: x[1
 filtered_word_index = {word: idx for word, idx in merged_word_index.items() if idx < 30000}
 vocab_size = len(filtered_word_index) + 2
 
-# Save updated index
 with open("word_index.json", "w") as f:
     json.dump(merged_word_index, f)
 with open("vocab_size.txt", "w") as f:
     f.write(str(vocab_size))
 
-# Tokenize
 tokenizer.word_index = filtered_word_index
 X = tokenizer.texts_to_sequences(texts)
 X = pad_sequences(X, maxlen=150)
 
-# Save tokenizer config
 with open("tokenizer_config.json", "w") as f:
     f.write(tokenizer.to_json())
 
-# %%
 # ✅ Build and train model
 model = Sequential([
     Input(shape=(150,)),
@@ -197,10 +190,8 @@ history = model.fit(
     verbose=1
 )
 
-# ✅ Save feedback count
 save_feedback_count(current_feedback_count)
 
-# %%
 # ✅ TFLite export
 model = load_model("last_model.h5")
 
@@ -217,12 +208,10 @@ tflite_model = converter.convert()
 with open("updated_model.tflite", "wb") as f:
     f.write(tflite_model)
 
-# ✅ Test
 interpreter = tf.lite.Interpreter(model_path="updated_model.tflite")
 interpreter.allocate_tensors()
 print("✅ TFLite model validated.")
 
-# %%
 # ✅ Save version
 with open("model_version.txt", "w") as f:
     f.write(TAG)
@@ -255,4 +244,3 @@ for file in ["updated_model.tflite", "last_model.h5", "word_index.json", "model_
     upload_to_release(file)
 
 print("✅ Retraining complete and uploaded.")
-
