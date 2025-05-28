@@ -90,7 +90,7 @@ def save_feedback_count(count):
 current_feedback_count = len(firebase_df)
 last_feedback_count = get_last_feedback_count()
 
-if current_feedback_count - last_feedback_count < 200:
+if current_feedback_count - last_feedback_count < 20:
     print(f"⛔ Not enough new feedback samples. Only {current_feedback_count - last_feedback_count} new.")
     exit(0)
 else:
@@ -104,15 +104,15 @@ kaggle_df.columns = ["corrected", "tweet"]
 sent140_df = pd.read_csv("sentiment140_labeled.csv")[["SENTIMENT", "TWEET"]].dropna()
 sent140_df.columns = ["corrected", "tweet"]
 
-print(f"✅ Feedback: {len(firebase_df)}, Kaggle: {len(kaggle_df)}, Sent140: {len(sent140_df)}")
-
-# ✅ Merge and prepare labels
 merged_df = pd.concat([kaggle_df, sent140_df, firebase_df], ignore_index=True)
+merged_df = merged_df[merged_df["corrected"].isin(["Negative", "Neutral", "Positive"])]
 texts = merged_df["tweet"].astype(str).apply(clean_text).tolist()
+
 labels = merged_df["corrected"].astype("category")
-labels = labels.cat.set_categories(["Negative", "Neutral", "Positive", "Irrelevant"])
+labels = labels.cat.set_categories(["Negative", "Neutral", "Positive"])
 y = labels.cat.codes.values
 num_classes = len(set(y))
+print(f"✅ Feedback: {len(firebase_df)}, Kaggle: {len(kaggle_df)}, Sent140: {len(sent140_df)}")
 
 # ✅ Download and update word index
 def download_from_release(filename, tag="v0.1"):
